@@ -1,0 +1,34 @@
+name: Compile Arduino Sketch
+
+on:
+  workflow_dispatch:
+    inputs:
+      sketch:
+        description: "Base64 encoded .ino file"
+        required: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Setup Arduino CLI
+      run: |
+        curl -fsSL https://raw.githubusercontent.com/arduino/arduino-cli/master/install.sh | sh
+        ./bin/arduino-cli config init
+        ./bin/arduino-cli core update-index
+        ./bin/arduino-cli core install arduino:avr
+
+    - name: Decode Sketch
+      run: |
+        mkdir sketch && echo "${{ github.event.inputs.sketch }}" | base64 -d > sketch/sketch.ino
+
+    - name: Compile
+      run: |
+        ./bin/arduino-cli compile --fqbn arduino:avr:uno sketch
+        cp sketch/build/arduino.avr.uno/sketch.hex compiled.hex
+
+    - name: Upload HEX Artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: sketch-hex
+        path: compiled.hex
