@@ -1,0 +1,20 @@
+name: Run Python Script
+
+on:
+  workflow_dispatch:
+    inputs:
+      script:
+        description: "Base64 encoded .py file"
+        required: true
+
+jobs:
+  run-python:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Decode and run script
+      run: |
+        echo "${{ github.event.inputs.script }}" | base64 -d > script.py
+        echo "📜 Script:"
+        cat script.py
+        echo "🚀 Output:"
+        python3 script.py
