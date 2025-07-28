@@ -2,10 +2,8 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Web Arduino IDE (iPadOS Ready)</title>
+  <title>Arduino IDE (iPad Ready)</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-  <!-- Monaco Editor -->
   <link rel="stylesheet" data-name="vs/editor/editor.main" href="https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/editor/editor.main.min.css">
   <style>
     html, body { margin: 0; height: 100%; overflow: hidden; }
@@ -30,26 +28,23 @@
 <body>
 
 <div id="toolbar">
-  <select id="modeSelector">
-    <option value="arduino">Arduino</option>
-    <option value="python">Python</option>
-  </select>
-  <button onclick="compileCode()">Compile</button>
-  <button onclick="uploadHex()">Upload</button>
-  <button onclick="runPython()">Run Python</button>
-  <input type="file" id="zipInput" accept=".zip" style="display:none;" />
-  <button onclick="document.getElementById('zipInput').click()">Add .zip Library</button>
+  <button onclick="compileCode()">Upload</button>
 </div>
-
 <div id="editor"></div>
 
-<!-- Monaco Loader -->
 <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/loader.min.js"></script>
 <script>
   require.config({ paths: { 'vs': 'https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs' } });
   require(["vs/editor/editor.main"], function () {
     window.editor = monaco.editor.create(document.getElementById('editor'), {
-      value: `// Select Arduino or Python above to get started`,
+      value: `void setup() {
+  Serial.begin(9600);
+}
+
+void loop() {
+  Serial.println("Hello!");
+  delay(1000);
+}`,
       language: "cpp",
       theme: "vs-dark"
     });
@@ -57,6 +52,5 @@
 </script>
 
 <script src="main.js"></script>
-
 </body>
 </html>

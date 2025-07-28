@@ -1,91 +1,58 @@
-let currentMode = "arduino";
+const GITHUB_REPO = "YOUR_USER/YOUR_REPO";
 
-// --- Switch between Arduino & Python ---
-document.getElementById("modeSelector").addEventListener("change", e => {
-  currentMode = e.target.value;
-  const lang = currentMode === "python" ? "python" : "cpp";
-  monaco.editor.setModelLanguage(editor.getModel(), lang);
-});
-
-// --- Compile Arduino Code via GitHub API ---
 async function compileCode() {
   const code = editor.getValue();
   const b64 = btoa(unescape(encodeURIComponent(code)));
 
-  alert("⏳ Uploading code to GitHub...");
+  const iframe = document.createElement("iframe");
+  iframe.style.display = "none";
+  iframe.src = `form.html?sketch=${encodeURIComponent(b64)}`;
+  document.body.appendChild(iframe);
 
-  const response = await fetch("https://api.github.com/repos/your-user/your-repo/actions/workflows/compile-arduino.yml/dispatches", {
-    method: "POST",
-    headers: {
-      "Authorization": "Bearer YOUR_GITHUB_TOKEN",
-      "Accept": "application/vnd.github+json",
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      ref: "main",
-      inputs: { sketch: b64 }
-    })
-  });
+  alert("⏳ Compiling sketch on GitHub Actions...");
 
-  if (response.ok) {
-    alert("✅ Code uploaded! Wait ~30s then download .hex.");
-    // Optionally poll for artifact URL...
-  } else {
-    alert("❌ Compile request failed");
-    console.error(await response.text());
+  const hexUrl = await waitForHexArtifact();
+  if (!hexUrl) {
+    alert("❌ Compile failed or timed out.");
+    return;
   }
+
+  const hexData = await fetch(hexUrl).then(r => r.text());
+  await flashHex(hexData);
 }
 
-// --- Upload HEX to Arduino using Web Serial + avrdude.js ---
-async function uploadHex() {
-  alert("📦 Select compiled .hex file to upload");
-  const [fileHandle] = await window.showOpenFilePicker({ types: [{ accept: { "text/plain": [".hex"] } }] });
-  const file = await fileHandle.getFile();
-  const hexData = await file.text();
+async function waitForHexArtifact() {
+  const start = Date.now();
+  while (Date.now() - start < 120000) {
+    const runsRes = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/actions/runs`);
+    const runs = await runsRes.json();
+    if (runs.workflow_runs && runs.workflow_runs.length > 0) {
+      const latest = runs.workflow_runs[0];
+      if (latest.status === "completed" && latest.conclusion === "success") {
+        const artifactsRes = await fetch(latest.artifacts_url);
+        const artifacts = await artifactsRes.json();
+        const artifact = artifacts.artifacts.find(a => a.name === "compiled-hex");
+        if (artifact) return artifact.archive_download_url;
+      }
+    }
+    await new Promise(r => setTimeout(r, 4000));
+  }
+  return null;
+}
 
+async function flashHex(hexData) {
   const { SerialPort } = await import("https://cdn.jsdelivr.net/npm/avrdude.js@latest/dist/web/avrdude.bundle.mjs");
-
   try {
     const port = await navigator.serial.requestPort();
     await port.open({ baudRate: 115200 });
-
     const avrdude = new SerialPort(port);
     await avrdude.flashHex(hexData, {
       mcu: "atmega328p",
       programmer: "arduino",
       baudrate: 115200
     });
-
     alert("✅ Upload complete!");
   } catch (e) {
     alert("❌ Upload failed: " + e.message);
-  }
-}
-
-// --- Run Python Script via GitHub Actions ---
-async function runPython() {
-  const code = editor.getValue();
-  const b64 = btoa(unescape(encodeURIComponent(code)));
-
-  alert("🐍 Sending Python script to run...");
-
-  const response = await fetch("https://api.github.com/repos/your-user/your-repo/actions/workflows/run-python.yml/dispatches", {
-    method: "POST",
-    headers: {
-      "Authorization": "Bearer YOUR_GITHUB_TOKEN",
-      "Accept": "application/vnd.github+json",
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      ref: "main",
-      inputs: { script: b64 }
-    })
-  });
-
-  if (response.ok) {
-    alert("✅ Python script submitted. Check GitHub Action logs.");
-  } else {
-    alert("❌ Python run failed");
-    console.error(await response.text());
   }
 }

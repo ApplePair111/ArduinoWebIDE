@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<html>
+<head><title>Trigger Compile</title></head>
+<body>
+  <form id="gh-form" method="post" action="https://api.github.com/repos/YOUR_USER/YOUR_REPO/actions/workflows/compile-arduino.yml/dispatches">
+    <input type="hidden" name="ref" value="main">
+    <input type="hidden" name="inputs[sketch]" id="sketch">
+  </form>
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    document.getElementById("sketch").value = params.get("sketch");
+    document.getElementById("gh-form").submit();
+  </script>
+</body>
+</html>
