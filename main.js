@@ -6,9 +6,15 @@ async function compileCode() {
 
   // Step 1: Trigger GitHub Action via form.html
   const iframe = document.createElement("iframe");
+  iframe.name = "gh-form-frame";
   iframe.style.display = "none";
-  iframe.src = `form.html?sketch=${encodeURIComponent(b64)}`;
+  iframe.src = "form.html";
   document.body.appendChild(iframe);
+
+  iframe.onload = () => {
+    console.log("[📨] Sending sketch via postMessage...");
+    iframe.contentWindow.postMessage({ sketch: b64 }, "*");
+  };
 
   alert("⏳ Sent sketch to GitHub… waiting for compile.");
 
