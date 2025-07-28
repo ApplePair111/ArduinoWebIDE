@@ -1,4 +1,4 @@
-const GITHUB_REPO = "YOUR_USER/YOUR_REPO";
+const GITHUB_REPO = "ApplePair111/ArduinoWebIDE";
 
 async function compileCode() {
   const code = editor.getValue();
