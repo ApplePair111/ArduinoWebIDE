@@ -2,15 +2,19 @@
 <html>
   <body>
     <form id="gh-form" method="POST" action="https://github.com/ApplePair111/ArduinoWebIDE/actions/workflows/compile-arduino.yml/dispatches">
-      <input type="hidden" name="ref" value="main">
-      <input type="hidden" name="inputs[sketch]" id="sketch">
+      <input type="hidden" name="ref" value="main" />
+      <input type="hidden" name="inputs[sketch]" id="sketch" />
     </form>
 
     <script>
-      const params = new URLSearchParams(location.search);
-      const sketch = params.get("sketch");
-      document.getElementById("sketch").value = sketch;
-      document.getElementById("gh-form").submit();
+      window.addEventListener("message", (event) => {
+        const sketch = event.data?.sketch;
+        if (!sketch) return console.warn("No sketch provided");
+
+        console.log("[📨] Received sketch via postMessage");
+        document.getElementById("sketch").value = sketch;
+        document.getElementById("gh-form").submit();
+      });
     </script>
   </body>
 </html>
