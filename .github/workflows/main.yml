@@ -24,8 +24,9 @@ jobs:
 
     - name: Compile
       run: |
-        ./bin/arduino-cli compile --fqbn arduino:avr:uno sketch
-        cp sketch/build/arduino.avr.uno/sketch.hex compiled.hex
+        ./bin/arduino-cli compile --fqbn arduino:avr:uno sketch --output-dir build --export-binaries
+        cp build/sketch.ino.hex compiled.hex
+
 
     - name: Upload HEX Artifact
       uses: actions/upload-artifact@v4
