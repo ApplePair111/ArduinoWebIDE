@@ -1,5 +1,12 @@
 const GITHUB_REPO = "ApplePair111/ArduinoWebIDE";
 
+fetch("arduino.d.ts")
+  .then(res => res.text())
+  .then(code => {
+    monaco.languages.typescript.javascriptDefaults.addExtraLib(code, "arduino.d.ts");
+    monaco.languages.typescript.typescriptDefaults.addExtraLib(code, "arduino.d.ts");
+  });
+
 async function compileCode() {
   const code = editor.getValue();
   const b64 = btoa(unescape(encodeURIComponent(code)));
