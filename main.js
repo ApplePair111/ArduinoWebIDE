@@ -1,5 +1,16 @@
 const GITHUB_REPO = "ApplePair111/ArduinoWebIDE";
 
+function log(...args) {
+  const line = args.map(a => typeof a === "object" ? JSON.stringify(a) : a).join(" ");
+  const logBox = document.getElementById("log");
+  if (logBox) {
+    logBox.textContent += line + "\\n";
+    logBox.scrollTop = logBox.scrollHeight;
+  }
+  console.log(...args); // still log to console if available
+}
+
+
 async function compileCode() {
   const code = editor.getValue();
   const b64 = btoa(unescape(encodeURIComponent(code)));
