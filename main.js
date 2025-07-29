@@ -12,6 +12,7 @@ function log(...args) {
 }
 
 async function compileCode() {
+  log("button pressed")
   const code = editor.getValue();
   const b64 = btoa(unescape(encodeURIComponent(code)));
   log("[📤] Sketch encoded to base64");
