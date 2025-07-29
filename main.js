@@ -12,22 +12,25 @@ function log(...args) {
 }
 
 async function compileCode() {
-  log("button pressed")
   const code = editor.getValue();
   const b64 = btoa(unescape(encodeURIComponent(code)));
-  log("[📤] Sketch encoded to base64");
+  log("[📤] Sketch encoded to base64. Length: " + b64.length);
 
   // Step 1: POST to your Vercel API
   log("[🚀] Sending sketch to Vercel trigger API...");
   const res = await fetch(VERCEL_API_TRIGGER, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      "Accept": "application/json"
+    },
     body: JSON.stringify({ sketch: b64 })
   });
 
+  const txt = await res.text();
   if (!res.ok) {
-    log("[❌] Vercel trigger failed:", await res.text());
-    alert("❌ Vercel trigger failed.");
+    log(`[❌] Vercel trigger failed (${res.status}):`, txt);
+    alert(`❌ Vercel trigger failed: ${txt}`);
     return;
   }
 
