@@ -9,6 +9,7 @@ function log(...args) {
     logBox.scrollTop = logBox.scrollHeight;
   }
   console.log(...args);
+  alert(...args)
 }
 
 async function compileCode() {
