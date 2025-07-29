@@ -1,5 +1,5 @@
 const GITHUB_REPO = "ApplePair111/ArduinoWebIDE";
-const VERCEL_API_TRIGGER = "https://arduino-web-ide-vercel.vercel.app/api/trigger";
+const VERCEL_API_TRIGGER = "https://arduino-web-ide.vercel.app/api/trigger";
 
 function log(...args) {
   const line = args.map(a => typeof a === "object" ? JSON.stringify(a) : a).join(" ");
