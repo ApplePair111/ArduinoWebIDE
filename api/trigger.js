@@ -25,7 +25,7 @@ export default async function handler(req, res) {
 
     // Trigger GitHub Action via dispatch
     const result = await fetch(
-      "https://api.github.com/repos/ApplePair111/ArduinoWebIDE/dispatches",
+      "https://api.github.com/repos/ApplePair111/ArduinoWebIDE/actions/workflows/main.yml/dispatches",
       {
         method: "POST",
         headers: {
