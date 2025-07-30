@@ -1,53 +1,37 @@
 // This is to be posted to Vercel Backend :)
 
 export default async function handler(req, res) {
-  // CORS headers for ALL requests
+  // --- CORS ---
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  if (req.method === "OPTIONS") return res.status(200).end();
 
-  // Handle preflight OPTIONS request
-  if (req.method === "OPTIONS") {
-    return res.status(200).end(); // 👈 browser just wants a 200 OK
-  }
-
-  // Only allow POST for main functionality
-  if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method not allowed" });
-  }
+  if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
 
   try {
-    const { sketch } = req.body;
+    // Vercel sometimes gives string body depending on framework/build
+    const body = typeof req.body === "string" ? JSON.parse(req.body) : req.body;
+    const { sketch } = body || {};
+    if (!sketch) return res.status(400).json({ error: "Missing 'sketch'" });
 
-    if (!sketch) {
-      return res.status(400).json({ error: "Missing sketch" });
-    }
+    const url = "https://api.github.com/repos/ApplePair111/ArduinoWebIDE/actions/workflows/main.yml/dispatches";
+    const gh = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${process.env.GITHUB_TOKEN}`,
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ ref: "main", inputs: { sketch } })
+    });
 
-    // Trigger GitHub Action via dispatch
-    const result = await fetch(
-      "https://api.github.com/repos/ApplePair111/ArduinoWebIDE/actions/workflows/main.yml/dispatches",
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${process.env.GITHUB_TOKEN}`,
-          Accept: "application/vnd.github+json",
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          event_type: "trigger-sketch-compile",
-          client_payload: { sketch },
-        }),
-      }
-    );
+    const text = await gh.text();
+    if (!gh.ok) return res.status(gh.status).json({ error: "GitHub API error", details: text });
 
-    const text = await result.text();
-
-    if (!result.ok) {
-      return res.status(result.status).json({ error: text });
-    }
-
-    return res.status(200).json({ status: "Triggered successfully" });
-  } catch (err) {
-    return res.status(500).json({ error: err.message });
+    return res.status(200).json({ ok: true, message: "workflow_dispatch sent" });
+  } catch (e) {
+    return res.status(500).json({ error: e.message });
   }
 }
