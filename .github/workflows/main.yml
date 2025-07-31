@@ -13,9 +13,6 @@ jobs:
     timeout-minutes: 10
 
     steps:
-      # (Checkout is optional; we compile the provided sketch only)
-      # - uses: actions/checkout@v4
-
       - name: Show runner info (debug)
         run: |
           echo "Runner: $RUNNER_OS"
@@ -42,52 +39,58 @@ jobs:
         run: |
           set -euxo pipefail
           mkdir -p sketch
-          # Decode the base64 input to sketch/sketch.ino
           echo "${{ github.event.inputs.sketch }}" | base64 -d > sketch/sketch.ino
-          echo "Sketch preview:"
+          echo "Sketch head:"
           head -n 20 sketch/sketch.ino || true
-          echo "Sketch size (bytes):"
+          echo "Sketch bytes:"
           wc -c sketch/sketch.ino
 
       - name: Compile (Uno)
         shell: bash
         run: |
           set -euxo pipefail
-          ./bin/arduino-cli compile --fqbn arduino:avr:uno sketch
-          echo "Build tree:"
-          find sketch -maxdepth 4 -type f -printf "%P\n" || true
+          ./bin/arduino-cli compile \
+            --fqbn arduino:avr:uno \
+            --build-path build \
+            --export-binaries \
+            sketch
+          echo "Build outputs:"
+          find build -maxdepth 3 -type f -printf "%P\n" || true
+          echo "Sketch root (exported binaries):"
+          find sketch -maxdepth 2 -type f -printf "%P\n" || true
 
       - name: Push HEX to Vercel (/api/artifact)
         env:
-          # Use your real Vercel URL (you asked to hard-use it):
           VERCEL_PUSH_URL: https://arduino-web-ide.vercel.app/api/artifact
-          HOOK_SECRET: ${{ secrets.HOOK_SECRET }}   # <-- Add this repo secret in GitHub
+          HOOK_SECRET: ${{ secrets.HOOK_SECRET }}
         shell: bash
         run: |
           set -euxo pipefail
 
-          # Find first .hex produced by arduino-cli
-          HEX_PATH="$(find sketch -type f -name '*.hex' | head -n 1 || true)"
-          if [ -z "$HEX_PATH" ]; then
+          HEX_PATH="$(find build -type f -name '*.hex' -print -quit)"
+          if [ -z "${HEX_PATH:-}" ]; then
+            HEX_PATH="$(find sketch -type f -name '*.hex' -print -quit)"
+          fi
+
+          if [ -z "${HEX_PATH:-}" ]; then
             echo "No HEX file found!" >&2
-            echo "Contents of sketch directory:" >&2
-            find sketch -type f -maxdepth 4 -printf "%P\n" >&2 || true
+            echo "Debug listing (build/):" >&2
+            find build -type f -maxdepth 3 -printf "%P\n" >&2 || true
+            echo "Debug listing (sketch/):" >&2
+            find sketch -type f -maxdepth 3 -printf "%P\n" >&2 || true
             exit 1
           fi
 
-          # Base64 encode the HEX (GNU and BSD compatibility)
           if base64 --help 2>/dev/null | grep -q -- "-w"; then
             HEX_B64="$(base64 -w0 "$HEX_PATH")"
           else
             HEX_B64="$(base64 "$HEX_PATH" | tr -d '\n')"
           fi
 
-          # POST to your Vercel endpoint with a shared secret
           curl -fsS -X POST "$VERCEL_PUSH_URL" \
             -H "Content-Type: application/json" \
             -H "X-Hook-Secret: $HOOK_SECRET" \
             -d "{\"run_id\":\"${GITHUB_RUN_ID}\",\"hex_b64\":\"${HEX_B64}\"}"
 
-      # (Optional) Print success
       - name: Done
         run: echo "HEX pushed to Vercel for run ${GITHUB_RUN_ID}"
