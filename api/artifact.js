@@ -1,7 +1,7 @@
-import JSZip from "jszip";
+const JSZip = require("jszip");
 
-export default async function handler(req, res) {
-  // --- CORS ---
+module.exports = async function handler(req, res) {
+  // CORS
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
@@ -9,65 +9,48 @@ export default async function handler(req, res) {
   if (req.method !== "GET") return res.status(405).json({ error: "Method not allowed" });
 
   const owner = "ApplePair111";
-  const repo = "ArduinoWebIDE";
+  const repo  = "ArduinoWebIDE";
   const token = process.env.GITHUB_TOKEN;
 
   try {
-    // Poll for up to 2 minutes
-    const timeout = Date.now() + 0000;
-    let artifactUrl = null;
+    const deadline = Date.now() + 120000; // 2 min
+    let artifactId = null;
 
-    while (Date.now() < timeout) {
+    while (Date.now() < deadline) {
       const runsRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/actions/runs`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          Accept: "application/vnd.github+json",
-        },
+        headers: { Authorization: `Bearer ${token}`, Accept: "application/vnd.github+json" },
       });
       const runs = await runsRes.json();
-      const run = runs.workflow_runs.find(
-        (r) =>
-          r.name === "Compile Arduino Sketch" &&
-          r.status === "completed" &&
-          r.conclusion === "success"
+      const run = runs.workflow_runs?.find(
+        r => r.name === "Compile Arduino Sketch" && r.status === "completed" && r.conclusion === "success"
       );
 
       if (run) {
-        const artifactsRes = await fetch(run.artifacts_url, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            Accept: "application/vnd.github+json",
-          },
+        const artsRes = await fetch(run.artifacts_url, {
+          headers: { Authorization: `Bearer ${token}`, Accept: "application/vnd.github+json" },
         });
-        const artifacts = await artifactsRes.json();
-        const artifact = artifacts.artifacts.find((a) => a.name === "compiled-hex");
-        if (artifact) {
-          artifactUrl = `https://api.github.com/repos/${owner}/${repo}/actions/artifacts/${artifact.id}/zip`;
-          break;
-        }
+        const arts = await artsRes.json();
+        const art = arts.artifacts?.find(a => a.name === "compiled-hex");
+        if (art) { artifactId = art.id; break; }
       }
-
-      await new Promise((r) => setTimeout(r, 4000)); // wait 4s and retry
+      await new Promise(r => setTimeout(r, 4000));
     }
 
-    if (!artifactUrl) return res.status(408).json({ error: "Artifact not ready" });
+    if (!artifactId) return res.status(408).json({ error: "Artifact not ready" });
 
-    // Download artifact ZIP
-    const zipRes = await fetch(artifactUrl, {
-      headers: { Authorization: `Bearer ${token}`, Accept: "application/vnd.github+json" },
-      redirect: "follow",
-    });
+    const zipRes = await fetch(
+      `https://api.github.com/repos/${owner}/${repo}/actions/artifacts/${artifactId}/zip`,
+      { headers: { Authorization: `Bearer ${token}`, Accept: "application/vnd.github+json" }, redirect: "follow" }
+    );
+    const zipBuf = await zipRes.arrayBuffer();
 
-    const zipBuffer = await zipRes.arrayBuffer();
-    const zip = await JSZip.loadAsync(zipBuffer);
+    const zip = await JSZip.loadAsync(zipBuf);
+    const hexName = Object.keys(zip.files).find(n => n.endsWith(".hex"));
+    if (!hexName) return res.status(404).json({ error: "HEX file not found" });
 
-    // Extract HEX
-    const hexFileName = Object.keys(zip.files).find((n) => n.endsWith(".hex"));
-    if (!hexFileName) return res.status(404).json({ error: "HEX file not found" });
-
-    const hex = await zip.files[hexFileName].async("text");
+    const hex = await zip.files[hexName].async("text");
     return res.status(200).json({ hex });
   } catch (err) {
     return res.status(500).json({ error: err.message });
   }
-}
+};
