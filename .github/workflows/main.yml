@@ -4,32 +4,90 @@ on:
   workflow_dispatch:
     inputs:
       sketch:
-        description: "Base64 encoded .ino file"
+        description: Base64 encoded .ino file
         required: true
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+
     steps:
-    - name: Setup Arduino CLI
-      run: |
-        curl -fsSL https://raw.githubusercontent.com/arduino/arduino-cli/master/install.sh | sh
-        ./bin/arduino-cli config init
-        ./bin/arduino-cli core update-index
-        ./bin/arduino-cli core install arduino:avr
+      # (Checkout is optional; we compile the provided sketch only)
+      # - uses: actions/checkout@v4
 
-    - name: Decode Sketch
-      run: |
-        mkdir sketch && echo "${{ github.event.inputs.sketch }}" | base64 -d > sketch/sketch.ino
+      - name: Show runner info (debug)
+        run: |
+          echo "Runner: $RUNNER_OS"
+          echo "GH Run ID: $GITHUB_RUN_ID"
+          echo "Event: $GITHUB_EVENT_NAME"
 
-    - name: Compile
-      run: |
-        ./bin/arduino-cli compile --fqbn arduino:avr:uno sketch --output-dir build --export-binaries
-        cp build/sketch.ino.hex compiled.hex
+      - name: Install Arduino CLI
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p bin
+          curl -fsSL https://raw.githubusercontent.com/arduino/arduino-cli/master/install.sh | sh
+          ./bin/arduino-cli version
 
+      - name: Prepare Arduino core
+        shell: bash
+        run: |
+          set -euxo pipefail
+          ./bin/arduino-cli core update-index
+          ./bin/arduino-cli core install arduino:avr
 
-    - name: Upload HEX Artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: sketch-hex
-        path: compiled.hex
+      - name: Create sketch from input
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p sketch
+          # Decode the base64 input to sketch/sketch.ino
+          echo "${{ github.event.inputs.sketch }}" | base64 -d > sketch/sketch.ino
+          echo "Sketch preview:"
+          head -n 20 sketch/sketch.ino || true
+          echo "Sketch size (bytes):"
+          wc -c sketch/sketch.ino
+
+      - name: Compile (Uno)
+        shell: bash
+        run: |
+          set -euxo pipefail
+          ./bin/arduino-cli compile --fqbn arduino:avr:uno sketch
+          echo "Build tree:"
+          find sketch -maxdepth 4 -type f -printf "%P\n" || true
+
+      - name: Push HEX to Vercel (/api/artifact)
+        env:
+          # Use your real Vercel URL (you asked to hard-use it):
+          VERCEL_PUSH_URL: https://arduino-web-ide.vercel.app/api/artifact
+          HOOK_SECRET: ${{ secrets.HOOK_SECRET }}   # <-- Add this repo secret in GitHub
+        shell: bash
+        run: |
+          set -euxo pipefail
+
+          # Find first .hex produced by arduino-cli
+          HEX_PATH="$(find sketch -type f -name '*.hex' | head -n 1 || true)"
+          if [ -z "$HEX_PATH" ]; then
+            echo "No HEX file found!" >&2
+            echo "Contents of sketch directory:" >&2
+            find sketch -type f -maxdepth 4 -printf "%P\n" >&2 || true
+            exit 1
+          fi
+
+          # Base64 encode the HEX (GNU and BSD compatibility)
+          if base64 --help 2>/dev/null | grep -q -- "-w"; then
+            HEX_B64="$(base64 -w0 "$HEX_PATH")"
+          else
+            HEX_B64="$(base64 "$HEX_PATH" | tr -d '\n')"
+          fi
+
+          # POST to your Vercel endpoint with a shared secret
+          curl -fsS -X POST "$VERCEL_PUSH_URL" \
+            -H "Content-Type: application/json" \
+            -H "X-Hook-Secret: $HOOK_SECRET" \
+            -d "{\"run_id\":\"${GITHUB_RUN_ID}\",\"hex_b64\":\"${HEX_B64}\"}"
+
+      # (Optional) Print success
+      - name: Done
+        run: echo "HEX pushed to Vercel for run ${GITHUB_RUN_ID}"
