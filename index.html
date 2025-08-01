@@ -57,6 +57,18 @@
 
   <div id="controls">
     <button onclick="compileCode()">⚡ Compile & Upload</button>
+    <button id="connect">Connect</button>
+    <script>
+      document.getElementById("connect").addEventListener("click", async () => {
+        try {
+          const port = await navigator.serial.requestPort();
+          await port.open({ baudRate: 9600 });
+          console.log("✅ Port opened:", port);
+        } catch (err) {
+          console.error("❌ Serial failed:", err);
+        }
+      });
+    </script>
   </div>
 
   <div id="log">[📝] Arduino Web IDE ready.\n</div>
