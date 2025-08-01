@@ -55,3 +55,18 @@ async function waitForHexByClientId(clientId, timeoutMs=120000, intervalMs=3000)
   }
   return null;
 }
+async function flashHexAuto(hex) {
+  // Automatically select the first available serial port
+  const ports = await navigator.serial.getPorts();
+  const port = ports[0] || await navigator.serial.requestPort();
+  await port.open({ baudRate: 115200 });
+
+  const Avrdude = (await import("https://cdn.jsdelivr.net/npm/avrdude.js@0.0.3/dist/web/avrdude.bundle.mjs")).SerialPort;
+  const programmer = new Avrdude(port);
+
+  await programmer.flashHex(hex, {
+    mcu: "atmega328p",
+    programmer: "arduino",
+    baudrate: 115200
+  });
+}
