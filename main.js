@@ -1,80 +1,115 @@
-const VERCEL_BASE_URL = "https://arduino-web-ide.vercel.app";
-const VERCEL_TRIGGER_URL  = `${VERCEL_BASE_URL}/api/trigger`;
-const VERCEL_ARTIFACT_URL = `${VERCEL_BASE_URL}/api/artifact`;
+const GITHUB_REPO = "ApplePair111/ArduinoWebIDE";
+const VERCEL_API_TRIGGER = "https://arduino-web-ide.vercel.app/api/trigger";
+const ARTIFACT_POLL_API = "https://arduino-web-ide.vercel.app/api/artifact";
 
-function log(...a){const s=a.map(x=>typeof x==="object"?JSON.stringify(x):String(x)).join(" ");
-  const el=document.getElementById("log"); if(el){el.textContent+=s+"\n"; el.scrollTop=el.scrollHeight;}
-  try{console.log(...a);}catch{}
-}
+let hexData = null;
+let selectedPort = null;
 
-async function compileCode() {
-  const code = window.editor.getValue();
-  if (!code?.trim()) { alert("Sketch is empty."); return; }
+const logBox = document.getElementById("log");
+const uploadBtn = document.getElementById("upload-btn");
+const selectPortBtn = document.getElementById("select-port-btn");
 
-  const sketchB64 = btoa(unescape(encodeURIComponent(code)));
-  const clientId = (crypto && crypto.randomUUID) ? crypto.randomUUID() : (Date.now()+"-"+Math.random());
+uploadBtn.disabled = true;
 
-  log("[🚀] Triggering workflow… client_id=", clientId);
-
-  // send both sketch and client_id
-  const t = await fetch(VERCEL_TRIGGER_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "Accept": "application/json" },
-    body: JSON.stringify({ sketch: sketchB64, client_id: clientId })
-  });
-  const tData = await t.json().catch(()=> ({}));
-  if (!t.ok) { log("[❌] Trigger failed:", tData.error || tData); return; }
-
-  log("[✅] Triggered. Waiting for HEX (~1 min)…");
-
-  // poll by client_id (no run_id needed)
-  const hex = await waitForHexByClientId(clientId);
-  if (!hex) { log("[❌] HEX not ready (timed out/failed)"); return; }
-
-  log("[✅] HEX received. Len:", hex.length);
-  await flashHexAuto(hex);
-}
-
-async function waitForHexByClientId(clientId, timeoutMs=120000, intervalMs=3000){
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    const res = await fetch(`${VERCEL_ARTIFACT_URL}?client_id=${encodeURIComponent(clientId)}`);
-    const txt = await res.text();
-    let json = null; try { json = JSON.parse(txt); } catch {}
-
-    if (res.ok && json) {
-      if (json.status === "success" && typeof json.hex === "string") return json.hex;
-      if (json.status === "failure" || json.error) { log("[❌] Build failed:", json.error || json.status); return null; }
-      // status unknown/in-progress
-    } else if (res.status === 404) {
-      log("[⏳] Not ready yet…");
-    } else {
-      log(`[⚠️] artifact ${res.status}:`, txt);
-    }
-    await new Promise(r=>setTimeout(r, intervalMs));
+function log(...args) {
+  const line = args.map(a => typeof a === "object" ? JSON.stringify(a) : a).join(" ");
+  if (logBox) {
+    logBox.textContent += line + "\n";
+    logBox.scrollTop = logBox.scrollHeight;
   }
-  return null;
+  console.log(...args);
 }
-async function flashHexAuto(hex) {
-  // Automatically select the first available serial port
-  const ports = await navigator.serial.getPorts();
-  const port = ports[0] || await navigator.serial.requestPort();
-  await port.open({ baudRate: 115200 });
-  // ⛑ Patch for avrdude.js trying to fetch 'version.txt'
-  const originalFetch = window.fetch;
-  window.fetch = async function (url, ...args) {
+
+// Patch version.txt error in avrdude.js
+const originalFetch = window.fetch;
+window.fetch = async function (url, ...args) {
   if (typeof url === "string" && url.includes("version.txt")) {
-    console.warn("[⚠️] Intercepted version.txt fetch");
     return new Response("0.0.3", { status: 200 });
   }
   return originalFetch(url, ...args);
 };
-  const Avrdude = (await import("https://cdn.jsdelivr.net/npm/avrdude.js@0.0.3/dist/web/avrdude.bundle.mjs")).SerialPort;
-  const programmer = new Avrdude(port);
 
-  await programmer.flashHex(hex, {
-    mcu: "atmega328p",
-    programmer: "arduino",
-    baudrate: 115200
+selectPortBtn.addEventListener("click", async () => {
+  try {
+    log("[🔌] Requesting serial port...");
+    selectedPort = await navigator.serial.requestPort();
+    await selectedPort.open({ baudRate: 115200 });
+    log("[✅] Serial port selected");
+  } catch (err) {
+    log("[❌] Could not open port: " + err.message);
+  }
+});
+
+uploadBtn.addEventListener("click", async () => {
+  if (!selectedPort || !hexData) {
+    alert("Select port and compile sketch first!");
+    return;
+  }
+
+  try {
+    log("[⬆️] Uploading via avrdude.js...");
+    const Avrdude = (await import("https://cdn.jsdelivr.net/npm/avrdude.js@0.0.3/dist/web/avrdude.bundle.mjs")).SerialPort;
+    const programmer = new Avrdude(selectedPort);
+
+    await programmer.flashHex(hexData, {
+      mcu: "atmega328p",
+      programmer: "arduino",
+      baudrate: 115200
+    });
+
+    log("[✅] Upload complete!");
+    alert("✅ Done!");
+  } catch (err) {
+    log("[❌] Upload failed: " + err.message);
+  }
+});
+
+async function compileCode() {
+  const code = editor.getValue();
+  const b64 = btoa(unescape(encodeURIComponent(code)));
+  log("[📤] Sketch encoded to base64");
+
+  log("[🚀] Sending to Vercel...");
+  const res = await fetch(VERCEL_API_TRIGGER, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ sketch: b64 })
   });
+
+  if (!res.ok) {
+    log("[❌] Trigger failed:", await res.text());
+    alert("❌ Compile trigger failed.");
+    return;
+  }
+
+  log("[✅] Triggered. Waiting for HEX...");
+
+  const hex = await pollForHex();
+  if (!hex) {
+    log("[❌] No hex received.");
+    return;
+  }
+
+  hexData = hex;
+  uploadBtn.disabled = false;
+  log("[🧠] HEX received. Ready to upload.");
 }
+
+async function pollForHex() {
+  const timeout = Date.now() + 2 * 60 * 1000;
+  while (Date.now() < timeout) {
+    log("[🔁] Polling artifact API...");
+    const res = await fetch(ARTIFACT_POLL_API);
+    const data = await res.json();
+
+    if (data.hex) {
+      return data.hex;
+    }
+
+    await new Promise(r => setTimeout(r, 4000));
+  }
+  return null;
+}
+
+// Attach compile button
+document.getElementById("compile-btn").addEventListener("click", compileCode);
