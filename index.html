@@ -1,57 +1,78 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Arduino IDE (iPad Ready)</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link rel="stylesheet" data-name="vs/editor/editor.main" href="https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/editor/editor.main.min.css">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Arduino Web IDE</title>
+
+  <!-- Monaco Editor -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.34.1/min/vs/loader.min.js"></script>
+
   <style>
-    html, body { margin: 0; height: 100%; overflow: hidden; }
-    #editor { width: 100%; height: calc(100% - 60px); }
-    #toolbar {
-      height: 60px;
-      display: flex;
-      align-items: center;
-      justify-content: space-around;
+    body {
+      margin: 0;
+      font-family: sans-serif;
       background: #1e1e1e;
-      color: white;
+      color: #eee;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
     }
-    button, select {
-      background: #333;
+
+    #editor {
+      flex: 1;
+      min-height: 0;
+    }
+
+    #controls {
+      padding: 10px;
+      background: #252526;
+      display: flex;
+      gap: 10px;
+    }
+
+    button {
+      background: #007acc;
       color: white;
-      padding: 6px 12px;
+      padding: 8px 16px;
       border: none;
-      border-radius: 4px;
+      border-radius: 3px;
+      cursor: pointer;
+    }
+
+    #log {
+      max-height: 200px;
+      overflow-y: auto;
+      background: #111;
+      color: #0f0;
+      padding: 10px;
+      font-family: monospace;
+      white-space: pre-wrap;
+      border-top: 1px solid #333;
     }
   </style>
 </head>
 <body>
+  <div id="editor"></div>
 
-<div id="toolbar">
-  <button onclick="compileCode()">Upload</button>
-  <div id="log" style="white-space:pre-wrap; font-family:monospace; padding:1em; background:#111; color:#0f0; height:200px; overflow:auto; border-radius:6px;"></div>
-</div>
-<div id="editor"></div>
+  <div id="controls">
+    <button onclick="compileCode()">⚡ Compile & Upload</button>
+  </div>
 
-<script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/loader.min.js"></script>
-<script>
-  require.config({ paths: { 'vs': 'https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs' } });
-  require(["vs/editor/editor.main"], function () {
-    window.editor = monaco.editor.create(document.getElementById('editor'), {
-      value: `void setup() {
-  Serial.begin(9600);
-}
+  <div id="log">[📝] Arduino Web IDE ready.\n</div>
 
-void loop() {
-  Serial.println("Hello!");
-  delay(1000);
-}`,
-      language: "cpp",
-      theme: "vs-dark"
+  <script>
+    require.config({ paths: { vs: 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.34.1/min/vs' }});
+    require(['vs/editor/editor.main'], function () {
+      window.editor = monaco.editor.create(document.getElementById('editor'), {
+        value: `void setup() {\n  pinMode(LED_BUILTIN, OUTPUT);\n}\n\nvoid loop() {\n  digitalWrite(LED_BUILTIN, HIGH);\n  delay(500);\n  digitalWrite(LED_BUILTIN, LOW);\n  delay(500);\n}`,
+        language: 'cpp',
+        theme: 'vs-dark',
+        automaticLayout: true
+      });
     });
-  });
-</script>
+  </script>
 
-<script src="main.js"></script>
+  <script src="main.js"></script>
 </body>
 </html>
