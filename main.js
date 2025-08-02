@@ -1,6 +1,12 @@
 const GITHUB_REPO = "ApplePair111/ArduinoWebIDE";
 const VERCEL_API_TRIGGER = "https://arduino-web-ide.vercel.app/api/trigger";
-const ARTIFACT_POLL_API = "https://arduino-web-ide.vercel.app/api/artifact";
+
+const CLIENT_ID = sessionStorage.getItem("clientId") || (() => {
+  const newId = crypto.randomUUID();
+  sessionStorage.setItem("clientId", newId);
+  return newId;
+})();
+const ARTIFACT_POLL_API = `https://arduino-web-ide.vercel.app/api/artifact?client_id=${CLIENT_ID}`;
 
 let hexData = null;
 let selectedPort = null;
@@ -11,12 +17,6 @@ const selectPortBtn = document.getElementById("select-port-btn");
 const compileBtn = document.getElementById("compile-btn");
 
 uploadBtn.disabled = true;
-
-const CLIENT_ID = sessionStorage.getItem("clientId") || (() => {
-  const newId = crypto.randomUUID();
-  sessionStorage.setItem("clientId", newId);
-  return newId;
-})();
 
 function log(...args) {
   const line = args.map(a => typeof a === "object" ? JSON.stringify(a) : a).join(" ");
@@ -107,11 +107,7 @@ async function pollForHex() {
   while (Date.now() < timeout) {
     log("[🔁] Polling artifact API...");
 
-    const res = await fetch(ARTIFACT_POLL_API, {
-      headers: {
-        "X-Client-ID": CLIENT_ID  // Your unique identifier
-      }
-    });
+    const res = await fetch(ARTIFACT_POLL_API, {});
 
     const data = await res.json();
 
