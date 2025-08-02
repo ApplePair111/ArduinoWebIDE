@@ -111,5 +111,5 @@ async function pollForHex() {
   return null;
 }
 
-// Attach compile button
-document.getElementById("compile-btn").addEventListener("click", compileCode);
+// Attach compile button (commented because it already has onclick)
+//document.getElementById("compile-btn").addEventListener("click", compileCode);
