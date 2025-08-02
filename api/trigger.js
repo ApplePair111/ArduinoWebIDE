@@ -1,8 +1,6 @@
 // This is to be posted to Vercel Backend :)
 
-if (!client_id) {
-  throw new Error("Missing required input: client_id");
-}
+
 
 module.exports = async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -15,7 +13,9 @@ module.exports = async function handler(req, res) {
     const body = typeof req.body === "string" ? JSON.parse(req.body) : req.body;
     const { sketch, client_id } = body || {};
     if (!sketch) return res.status(400).json({ error: "Missing sketch" });
-
+    if (!client_id) {
+      throw new Error("Missing required input: client_id");
+    }
     const owner = "ApplePair111";
     const repo  = "ArduinoWebIDE";
     const token = process.env.GITHUB_TOKEN;
