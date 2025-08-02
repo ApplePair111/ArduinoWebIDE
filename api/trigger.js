@@ -1,5 +1,9 @@
 // This is to be posted to Vercel Backend :)
 
+if (!client_id) {
+  throw new Error("Missing required input: client_id");
+}
+
 module.exports = async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
