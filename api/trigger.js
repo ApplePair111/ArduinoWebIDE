@@ -24,7 +24,13 @@ module.exports = async function handler(req, res) {
         Accept: "application/vnd.github+json",
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ ref: "main", inputs: { sketch, client_id: client_id || "" } }),
+      body: JSON.stringify({
+        ref: "main",
+        inputs: {
+          sketch: sketch,
+          client_id: client_id
+        }
+      })
     });
 
     if (!ghRes.ok) {
