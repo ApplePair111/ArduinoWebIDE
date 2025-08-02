@@ -8,8 +8,15 @@ let selectedPort = null;
 const logBox = document.getElementById("log");
 const uploadBtn = document.getElementById("upload-btn");
 const selectPortBtn = document.getElementById("select-port-btn");
+const compileBtn = document.getElementById("compile-btn");
 
 uploadBtn.disabled = true;
+
+const CLIENT_ID = sessionStorage.getItem("clientId") || (() => {
+  const newId = crypto.randomUUID();
+  sessionStorage.setItem("clientId", newId);
+  return newId;
+})();
 
 function log(...args) {
   const line = args.map(a => typeof a === "object" ? JSON.stringify(a) : a).join(" ");
@@ -20,7 +27,7 @@ function log(...args) {
   console.log(...args);
 }
 
-// Patch version.txt error in avrdude.js
+// Patch avrdude.js version.txt error
 const originalFetch = window.fetch;
 window.fetch = async function (url, ...args) {
   if (typeof url === "string" && url.includes("version.txt")) {
@@ -99,7 +106,13 @@ async function pollForHex() {
   const timeout = Date.now() + 2 * 60 * 1000;
   while (Date.now() < timeout) {
     log("[🔁] Polling artifact API...");
-    const res = await fetch(ARTIFACT_POLL_API);
+
+    const res = await fetch(ARTIFACT_POLL_API, {
+      headers: {
+        "X-Client-ID": CLIENT_ID  // Your unique identifier
+      }
+    });
+
     const data = await res.json();
 
     if (data.hex) {
@@ -110,5 +123,3 @@ async function pollForHex() {
   }
   return null;
 }
-
-
