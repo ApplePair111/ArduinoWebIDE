@@ -4,84 +4,42 @@ on:
   workflow_dispatch:
     inputs:
       sketch:
-        description: Base64 encoded .ino
+        description: "Base64 encoded sketch"
         required: true
       client_id:
-        description: Client correlation id
-        required: false
-        default: ""
+        description: "Client ID to respond to"
+        required: true
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - name: Install Arduino CLI
-        shell: bash
-        run: |
-          set -euxo pipefail
-          mkdir -p bin
-          curl -fsSL https://raw.githubusercontent.com/arduino/arduino-cli/master/install.sh | sh
-          ./bin/arduino-cli version
 
-      - name: Prepare Arduino core
-        shell: bash
+    env:
+      VERCEL_PUSH_URL: https://arduino-web-ide.vercel.app/api/artifact
+      HOOK_SECRET: ${{ secrets.HOOK_SECRET }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Arduino CLI
         run: |
-          set -euxo pipefail
+          curl -fsSL https://raw.githubusercontent.com/arduino/arduino-cli/master/install.sh | sh
+          mkdir -p ~/.arduino15
+          ./bin/arduino-cli config init
           ./bin/arduino-cli core update-index
           ./bin/arduino-cli core install arduino:avr
 
-      - name: Create sketch from input
-        shell: bash
+      - name: Prepare sketch directory
         run: |
-          set -euxo pipefail
           mkdir -p sketch
           echo "${{ github.event.inputs.sketch }}" | base64 -d > sketch/sketch.ino
 
-      - name: Compile (Uno)
-        shell: bash
+      - name: Compile sketch
+        run: ./bin/arduino-cli compile --fqbn arduino:avr:uno sketch
+
+      - name: Upload to Vercel artifact API
         run: |
-          set -euxo pipefail
-          ./bin/arduino-cli compile --fqbn arduino:avr:uno --build-path build --export-binaries sketch
-          find build -maxdepth 3 -type f -printf "%P\n" || true
-          find sketch -maxdepth 2 -type f -printf "%P\n" || true
-
-      - name: Report result to Vercel (success or failure)
-        if: ${{ always() }}
-        env:
-          VERCEL_PUSH_URL: https://arduino-web-ide.vercel.app/api/artifact
-          HOOK_SECRET: ${{ secrets.HOOK_SECRET }}
-          CLIENT_ID: ${{ github.event.inputs.client_id }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          STATUS="${{ job.status }}"
-
-          HEX_PATH="$(find build -type f -name '*.hex' -print -quit || true)"
-          if [ -z "${HEX_PATH:-}" ]; then
-            HEX_PATH="$(find sketch -type f -name '*.hex' -print -quit || true)"
-          fi
-
-          HEX_B64=""
-          if [ "$STATUS" = "success" ] && [ -n "${HEX_PATH:-}" ]; then
-            if base64 --help 2>/dev/null | grep -q -- "-w"; then
-              HEX_B64="$(base64 -w0 "$HEX_PATH")"
-            else
-              HEX_B64="$(base64 "$HEX_PATH" | tr -d '\n')"
-            fi
-          fi
-
-          ERR_MSG=""
-          if [ "$STATUS" != "success" ]; then
-            ERR_MSG="Build failed in GitHub Actions"
-          fi
-
-          BODY="{\"run_id\":\"${GITHUB_RUN_ID}\",\"client_id\":\"${CLIENT_ID}\",\"status\":\"${STATUS}\""
-          if [ -n "$HEX_B64" ]; then BODY="$BODY, \"hex_b64\":\"$HEX_B64\""; fi
-          if [ -n "$ERR_MSG" ]; then BODY="$BODY, \"error\":\"$ERR_MSG\""; fi
-          BODY="$BODY}"
-
-          curl -fsS -X POST "$VERCEL_PUSH_URL" \
-            -H "Content-Type: application/json" \
-            -H "X-Hook-Secret: $HOOK_SECRET" \
-            -d "$BODY"
+          curl -X POST "$VERCEL_PUSH_URL?client_id=${{ github.event.inputs.client_id }}" \
+            -H "x-hook-secret: $HOOK_SECRET" \
+            --data-binary "@sketch/build/arduino.avr.uno/sketch.hex"
